@@ -1,0 +1,35 @@
+{
+  "language": "Solidity",
+  "sources": {
+    "contracts/Ebay.sol": {
+      "content": "// SPDX-License-Identifier: MIT\npragma solidity ^0.8.8;\n\n// pragma experimental ABIEncoderV2;\n\ncontract Ebay {\n    struct Auction {\n        uint256 id;\n        address payable seller;\n        string name;\n        string description;\n        uint256 min;\n        uint256 end;\n        uint256 bestOfferId;\n        uint256[] offerIds;\n    }\n    struct Offer {\n        uint256 id;\n        uint256 auctionId;\n        address payable buyer;\n        uint256 price;\n    }\n    mapping(uint256 => Auction) private auctions;\n    mapping(uint256 => Offer) private offers;\n    mapping(address => uint256[]) private userAuctions;\n    mapping(address => uint256[]) private userOffers;\n    uint256 private nextAuctionId = 1;\n    uint256 private nextOfferId = 1;\n\n    modifier auctionExists(uint256 _auctionId) {\n        require(\n            _auctionId > 0 && _auctionId < nextAuctionId,\n            \"auction does not exist!\"\n        );\n        _;\n    }\n\n    function createAuction(\n        string calldata _name,\n        string calldata _description,\n        uint256 _min,\n        uint256 _duration\n    ) external {\n        require(_min > 0, \"min must be greater than 0\");\n        require(\n            _duration > 86400 && _duration < 864000,\n            \"duration must be comprised between 1 to 10 days\"\n        );\n        uint256[] memory offerIds = new uint256[](0);\n        auctions[nextAuctionId] = Auction(\n            nextAuctionId,\n            payable(msg.sender),\n            _name,\n            _description,\n            _min,\n            block.timestamp + _duration,\n            0,\n            offerIds\n        );\n        userAuctions[msg.sender].push(nextAuctionId);\n        nextAuctionId++;\n    }\n\n    function createOffer(uint256 _auctionId)\n        external\n        payable\n        auctionExists(_auctionId)\n    {\n        Auction storage auction = auctions[_auctionId];\n        Offer storage bestOffer = offers[auction.bestOfferId];\n        require(block.timestamp < auction.end, \"auction has expired\");\n        require(\n            msg.value >= auction.min && msg.value > bestOffer.price,\n            \"msg value must be superior to min and bestOffer\"\n        );\n        auction.bestOfferId = nextOfferId;\n        auction.offerIds.push(nextOfferId);\n        offers[nextOfferId] = Offer(\n            nextOfferId,\n            _auctionId,\n            payable(msg.sender),\n            msg.value\n        );\n        userOffers[msg.sender].push(nextOfferId);\n        nextOfferId++;\n    }\n\n    function trade(uint256 _auctionId) external auctionExists(_auctionId) {\n        Auction storage auction = auctions[_auctionId];\n        Offer storage bestOffer = offers[auction.bestOfferId];\n        require(block.timestamp > auction.end, \"auction is still active\");\n        for (uint256 i = 0; i < auction.offerIds.length; i++) {\n            uint256 offerId = auction.offerIds[i];\n            if (offerId != auction.bestOfferId) {\n                Offer storage offer = offers[offerId];\n                offer.buyer.transfer(offer.price);\n            }\n        }\n        auction.seller.transfer(bestOffer.price);\n    }\n\n    function getAuction() external view returns (Auction[] memory) {\n        Auction[] memory _auctions = new Auction[](nextAuctionId - 1);\n        for (uint256 i = 1; i < nextAuctionId + 1; i++) {\n            _auctions[i - 1] = _auctions[i];\n        }\n        return _auctions;\n    }\n\n    function getUserAuctions(address _user)\n        external\n        view\n        returns (Auction[] memory)\n    {\n        uint256[] storage userAuctionIds = userAuctions[_user];\n        Auction[] memory _auctions = new Auction[](userAuctionIds.length);\n        for (uint256 i = 0; i < userAuctionIds.length; i++) {\n            uint256 auctionId = userAuctionIds[i];\n            _auctions[i] = auctions[auctionId];\n        }\n        return _auctions;\n    }\n\n    function getUserOffers(address _user)\n        external\n        view\n        returns (Offer[] memory)\n    {\n        uint256[] storage userOfferIds = userOffers[_user];\n        Offer[] memory _offers = new Offer[](userOfferIds.length);\n        for (uint256 i = 0; i < userOfferIds.length; i++) {\n            uint256 offerId = userOfferIds[i];\n            _offers[i] = offers[offerId];\n        }\n        return _offers;\n    }\n}\n"
+    }
+  },
+  "settings": {
+    "optimizer": {
+      "enabled": false,
+      "runs": 200
+    },
+    "outputSelection": {
+      "*": {
+        "*": [
+          "abi",
+          "evm.bytecode",
+          "evm.deployedBytecode",
+          "evm.methodIdentifiers",
+          "metadata",
+          "devdoc",
+          "userdoc",
+          "storageLayout",
+          "evm.gasEstimates"
+        ],
+        "": [
+          "ast"
+        ]
+      }
+    },
+    "metadata": {
+      "useLiteralContent": true
+    }
+  }
+}
